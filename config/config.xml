@@ -1,0 +1,26 @@
+<config>
+    <OpenAI>
+        <URL>https://api.openai.com/v1/chat/completions</URL>
+        <KEY>your-api-key</KEY>
+        <MODEL>o4-mini,gpt-4o-mini</MODEL>
+        <TIMEOUT>90</TIMEOUT>
+    </OpenAI>
+    <Claude>
+        <URL>https://api.anthropic.com/v1/messages</URL>
+        <KEY>your-api-key</KEY>
+        <MODEL>claude-3-opus-latest,claude-sonnet-4-20250514,claude-3-7-sonnet-latest,claude-3-5-haiku-latest</MODEL>
+        <TIMEOUT>90</TIMEOUT>
+    </Claude>
+    <DeepSeek>
+        <URL>https://api.deepseek.com/v1/chat/completions</URL>
+        <KEY>your-api-key</KEY>
+        <MODEL>deepseek-reasoner,deepseek-chat</MODEL>
+        <TIMEOUT>90</TIMEOUT>
+    </DeepSeek>
+    <Gemini>
+        <URL>https://generativelanguage.googleapis.com/v1beta/models/</URL>
+        <KEY>your-api-key</KEY>
+        <MODEL>gemini-2.5-pro,gemini-2.5-flash,gemini-2.5-flash-lite-preview-06-17</MODEL>
+        <TIMEOUT>90</TIMEOUT>
+    </Gemini>
+</config>

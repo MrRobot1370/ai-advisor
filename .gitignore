@@ -1,0 +1,26 @@
+# Distribution / packaging
+install/
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Virtual environments
+.env
+env/
+venv/
+
+# IDEs and editors
+.qtcreator
+.vscode/
+.idea/
+*.user
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Other
+log.txt
+__pycache__
+*.py[cod]

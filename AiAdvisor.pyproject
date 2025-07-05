@@ -1,0 +1,16 @@
+{
+    "files":
+    [
+        "main.py",
+        "Main.qml",
+        "controllers/applicationcontroller.py",
+        "controls/CopyButton.qml",
+        "controls/CustomTextArea.qml",
+        "controls/MessageContent.qml",
+        "controls/SelectableText.qml",
+        "includes/speechToText.py",
+        "includes/textToSpeech.py",
+        "config/config.xml",
+        "icons/brain.png"
+    ]
+}
