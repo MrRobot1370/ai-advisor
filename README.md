@@ -6,7 +6,7 @@
 
  AI Advisor is a cross-platform desktop application that provides a unified chat interface to interact with multiple AI model providers (OpenAI, Claude, Gemini, DeepSeek). It supports text-based chat with efficient token usage and cost-effective pay-as-you-go pricing, and can be packaged as a portable executable for Windows.
 
- <img width="737" alt="ai-advisor" src="https://github.com/user-attachments/assets/a50f5097-5c96-4b84-bd23-8cfced2cf3cf" />
+<img width="752" height="586" alt="ai-advisor-v0 1 0" src="https://github.com/user-attachments/assets/7f5f4ccf-3805-404a-8ce4-f6bb5a5c7665" />
 
  ## Features
  
