@@ -52,15 +52,17 @@
  
  ## Configuration
  
- Edit `config/config.xml` to add your API keys, select models, and set timeouts. Example:
+ Edit `config/config.xml` to add your API keys, models, timeouts (optional) and max tokens (optional). Example:
  
  ```xml
  <config>
    <OpenAI>
      <URL>https://api.openai.com/v1/chat/completions</URL>
      <KEY>YOUR_OPENAI_API_KEY</KEY>
-     <MODEL>o4-mini,gpt-4o-mini</MODEL>
-     <TIMEOUT>90</TIMEOUT>
+     <MODELS>
+         <MODEL name="o4-mini" timeout="90" />
+         <!-- Add other models as needed -->
+     </MODELS>
    </OpenAI>
    <!-- Add other providers as needed -->
  </config>
@@ -73,7 +75,7 @@
  - Enter your message.
  - View and copy responses.
  - View used tokens to manage usage.
- - Chat history will be saved in history.txt.
+ - Chat history will be saved in log.txt.
  
  ## Contributing
  

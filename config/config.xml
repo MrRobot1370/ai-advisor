@@ -1,26 +1,63 @@
+<!--
+  ────────────────────────────────────────────────────────────────────────────
+  ABOUT THE max_tokens ATTRIBUTE
+  ────────────────────────────────────────────────────────────────────────────
+  • The value is parsed and stored for every model, but it is
+    actively injected into the request payload only for
+      – Claude / Anthropic models
+        (their API REQUIRES a max_tokens field).
+  • For other providers (OpenAI, DeepSeek, Gemini, …)
+    the helper leaves it to the caller to decide whether
+    to limit tokens
+  ────────────────────────────────────────────────────────────────────────────
+-->
 <config>
     <OpenAI>
         <URL>https://api.openai.com/v1/chat/completions</URL>
         <KEY>your-api-key</KEY>
-        <MODEL>o4-mini,gpt-4o-mini</MODEL>
-        <TIMEOUT>90</TIMEOUT>
+        <MODELS>
+            <!--
+                “o3” is not available to all ChatGPT API users.
+                See OpenAI docs for access details.
+            -->
+            <!--<MODEL name="o3" timeout="120" />-->
+            <MODEL name="o4-mini" timeout="90" />
+            <MODEL name="gpt-4o-mini" timeout="60" />
+        </MODELS>
     </OpenAI>
     <Claude>
         <URL>https://api.anthropic.com/v1/messages</URL>
         <KEY>your-api-key</KEY>
-        <MODEL>claude-3-opus-latest,claude-sonnet-4-20250514,claude-3-7-sonnet-latest,claude-3-5-haiku-latest</MODEL>
-        <TIMEOUT>90</TIMEOUT>
+        <!--
+            Ensure each MODEL’s max_tokens match the latest Claude specifications.
+            See the official Anthropic Claude models overview for current limits:
+            https://docs.anthropic.com/en/docs/about-claude/models/overview
+        -->
+        <MODELS>
+            <!--
+                “claude-3-opus” is not available to all Claude API users.
+                See Anthropic docs for access details.
+            -->
+            <!--<MODEL name="claude-3-opus-latest" timeout="120" max_tokens="16384" />-->
+            <MODEL name="claude-sonnet-4-20250514" timeout="120" max_tokens="32768" />
+            <MODEL name="claude-3-5-haiku-latest" timeout="60" max_tokens="8192" />
+        </MODELS>
     </Claude>
     <DeepSeek>
         <URL>https://api.deepseek.com/v1/chat/completions</URL>
         <KEY>your-api-key</KEY>
-        <MODEL>deepseek-reasoner,deepseek-chat</MODEL>
-        <TIMEOUT>90</TIMEOUT>
+        <MODELS>
+            <MODEL name="deepseek-reasoner" timeout="180" />
+            <MODEL name="deepseek-chat" timeout="120" />
+        </MODELS>
     </DeepSeek>
     <Gemini>
         <URL>https://generativelanguage.googleapis.com/v1beta/models/</URL>
         <KEY>your-api-key</KEY>
-        <MODEL>gemini-2.5-pro,gemini-2.5-flash,gemini-2.5-flash-lite-preview-06-17</MODEL>
-        <TIMEOUT>90</TIMEOUT>
+        <MODELS>
+            <MODEL name="gemini-2.5-pro" timeout="120" />
+            <MODEL name="gemini-2.5-flash" timeout="90" />
+            <MODEL name="gemini-2.5-flash-lite-preview-06-17" timeout="60" />
+        </MODELS>
     </Gemini>
 </config>

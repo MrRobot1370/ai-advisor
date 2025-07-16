@@ -1,86 +1,228 @@
 from includes import speechToText as stt
 from includes import textToSpeech as tts
 
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Mapping, Tuple
+
 import re
 import requests
 import xml.etree.ElementTree as ET
-import sys, os
+import sys
 
 from PySide6.QtCore import QObject, Slot, Signal, Property, QDateTime, Qt
 from PySide6.QtGui import QGuiApplication
 from concurrent.futures import ThreadPoolExecutor
 
-def get_base_path():
+# Configuration handling
+@dataclass(frozen=True)
+class ModelConfig:
     """
-    Return the folder where our EXE or script actually lives.
-    - When running under PyInstaller (frozen), __file__ lives in a temp
-      directory.  sys.executable is the real EXE path.
-    - When running as a normal script, __file__ shows you your source
-      tree.  We go one level up to find the config/ folder.
+    Per-model run-time settings extracted from config.xml
+    (timeout, max_tokens … may grow in the future).
     """
-    if getattr(sys, 'frozen', False):
-        # Running in PyInstaller bundle
-        return os.path.dirname(sys.executable)
-    else:
-        # Running in IDE / plain python
-        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    name: str
+    timeout: int
+    max_tokens: int
+    extra: Mapping[str, Any] = field(default_factory=dict)
 
-# Path to config.xml
-base = get_base_path()
-config_path = os.path.join(base, 'config', 'config.xml')
-if not os.path.exists(config_path):
-    raise Exception(f"Configuration file not found at: {config_path}")
 
-# Parse the XML file
-try:
-    tree = ET.parse(config_path)
-except ET.ParseError as e:
-    raise Exception(f"Failed to parse XML ({config_path}): {e}")
+@dataclass(frozen=True)
+class ProviderConfig:
+    """
+    API provider definition (OpenAI / Claude / …) plus all of its models.
+    """
+    name: str
+    url: str
+    key: str
+    models: Mapping[str, ModelConfig]
 
-root = tree.getroot()
-configurations = {}
-available_models = []
-for element in root:
-    name = element.tag
+
+# Helpers
+def _resource_root() -> Path:
+    """
+    Absolute path of the folder that contains our *resources* (config/, …).
+
+    • When running from a PyInstaller bundle → <bundle>/config
+    • When running from source                 → <project>/config
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+def _parse_config_xml(xml_path: Path) -> Tuple[Dict[str, ProviderConfig], List[str]]:
+    """
+    Parse config.xml and create an index that maps …
+
+        provider-name → ProviderConfig
+                     ↳ model-name    → ModelConfig
+    """
+    if not xml_path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {xml_path}")
+
     try:
-        url_node     = element.find('URL')
-        key_node     = element.find('KEY')
-        model_node   = element.find('MODEL')
-        timeout_node = element.find('TIMEOUT')
+        tree = ET.parse(xml_path)
+    except ET.ParseError as exc:
+        raise RuntimeError(f"Failed to parse {xml_path}: {exc}") from exc
 
-        if None in (url_node, key_node, model_node, timeout_node):
-            missing = [t for t,n in
-                       (('URL',url_node),('KEY',key_node),
-                        ('MODEL',model_node),('TIMEOUT',timeout_node))
-                       if n is None]
-            raise Exception(f"Missing tag(s) {missing} under <{name}>")
+    providers: Dict[str, ProviderConfig] = {}
+    model_dropdown: List[str] = ["select model"]     # GUI helper
 
-        url     = url_node.text.strip()
-        key     = key_node.text.strip()
-        models  = [m.strip() for m in model_node.text.split(',') if m.strip()]
-        timeout = int(timeout_node.text) # may ValueError
+    for provider_el in tree.getroot():
+        provider_name = provider_el.tag
 
-    except ValueError:
-        raise Exception(f"Invalid TIMEOUT value under <{name}>; must be an integer")
-    except Exception as e:
-        raise Exception(f"Error processing <{name}>: {e}")
+        url = (provider_el.findtext("URL") or "").strip()
+        key = (provider_el.findtext("KEY") or "").strip()
+        if not url or not key:
+            raise ValueError(f"<{provider_name}> needs <URL> and <KEY> tags")
 
-    available_models.extend(models)
-    configurations[name] = {
-        'URL':     url,
-        'KEY':     key,
-        'MODEL':   models,
-        'TIMEOUT': timeout
-    }
+        models_el = provider_el.find("MODELS")
+        if models_el is None:
+            raise ValueError(f"<{provider_name}> is missing the <MODELS> section")
+
+        model_cfgs: Dict[str, ModelConfig] = {}
+        for model_el in models_el.findall("MODEL"):
+            model_name = (model_el.get("name") or "").strip()
+            if not model_name:
+                raise ValueError(
+                    f"A <MODEL> entry under <{provider_name}> has no name"
+                )
+
+            # mandatory attributes with sane fallbacks
+            try:
+                timeout = int(model_el.get("timeout", 90))
+                max_tokens = int(model_el.get("max_tokens", 4096))
+            except ValueError as exc:
+                raise ValueError(
+                    f'Non-integer attribute in <MODEL name="{model_name}">'
+                ) from exc
+
+            # collect any additional attributes (future proof)
+            extras: Dict[str, str] = {
+                k: v for k, v in model_el.attrib.items()
+                if k not in {"name", "timeout", "max_tokens"}
+            }
+
+            cfg = ModelConfig(
+                name=model_name,
+                timeout=timeout,
+                max_tokens=max_tokens,
+                extra=extras,
+            )
+            model_cfgs[model_name] = cfg
+            model_dropdown.append(model_name)
+
+        providers[provider_name] = ProviderConfig(
+            name=provider_name,
+            url=url,
+            key=key,
+            models=model_cfgs,
+        )
+
+    return providers, model_dropdown
 
 payload = {
     "model": "",
     "messages": []
 }
 
-# Open file for writing chat history
-filename = "history.txt"
+CONFIG_FILE = _resource_root() / "config" / "config.xml"
+PROVIDERS, AVAILABLE_MODELS = _parse_config_xml(CONFIG_FILE)
 
+
+# Generic request helper
+def _make_headers(provider: ProviderConfig, model_name: str) -> Dict[str, str]:
+    """
+    Return the HTTP header dict required for the provider/model combination.
+    Tries to keep the old heuristics intact.
+    """
+    key = provider.key
+    lower_name = model_name.lower()
+
+    if "claude" in lower_name:                         # Anthropic
+        return {
+            "Content-Type": "application/json",
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+        }
+    if "gemini" in lower_name:                         # Google
+        return {"Content-Type": "application/json"}
+    if "gpt" in lower_name or re.match(r"^o\d", model_name):
+        return {                                       # OpenAI family
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {key}",
+        }
+    if "deepseek" in lower_name:                       # DeepSeek
+        return {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {key}",
+        }
+
+    raise ValueError(f"Could not determine headers for model '{model_name}'")
+
+
+def _find_provider(model_name: str) -> Tuple[ProviderConfig, ModelConfig]:
+    """
+    Locate the provider and model configuration for *model_name*.
+    """
+    for provider in PROVIDERS.values():
+        if model_name in provider.models:
+            return provider, provider.models[model_name]
+    raise KeyError(f"Model '{model_name}' not found in configuration.")
+
+
+def postRequest(model_name: str, payload: dict) -> requests.Response:
+    """
+    One single entry point that dispatches the request to the right provider.
+
+    • Uses the per-model timeout / max_tokens settings from config.xml
+    • Converts Gemini payloads automatically
+    """
+    provider_cfg, model_cfg = _find_provider(model_name)
+    headers = _make_headers(provider_cfg, model_name)
+
+    # Provider specific preparation
+    data_to_send: dict = payload
+
+    """
+    Hint about other future providers
+       • If a new provider requires the max_tokens value, add another `elif` branch similar to the Claude block.
+    """
+    if "claude" in model_name.lower():
+        # For Anthropic the field is mandatory
+        data_to_send = payload.copy()
+        data_to_send["max_tokens"] = model_cfg.max_tokens
+
+    elif "gemini" in model_name.lower():
+        # Different endpoint & body structure
+        url = (
+            f"{provider_cfg.url}{model_name}:generateContent"
+            f"?key={provider_cfg.key}"
+        )
+        gemini_contents = [
+            {
+                "role": "model" if m["role"] == "assistant" else "user",
+                "parts": [{"text": m["content"]}],
+            }
+            for m in payload["messages"]
+        ]
+        data_to_send = {"contents": gemini_contents}
+        return requests.post(
+            url, headers=headers, json=data_to_send, timeout=model_cfg.timeout
+        )
+
+    #print(f'data_to_send: {data_to_send}')
+    # All “OpenAI-ish” endpoints (OpenAI, DeepSeek, …) go here
+    return requests.post(
+        provider_cfg.url,
+        headers=headers,
+        json=data_to_send,
+        timeout=model_cfg.timeout,
+    )
+
+# Open file for writing chat history
+filename = "log.txt"
 # get the current date and time
 now = QDateTime.currentDateTime()
 # format the date and time to a readable string
@@ -89,66 +231,7 @@ date_time_obj = QDateTime.fromString(date_time_str, Qt.ISODate)
 readable_date_time_str = date_time_obj.toString("dd.MM.yyyy hh:mm:ss")
 with open(filename, "a") as f:
     # Write initial string
-    f.write("********************* " + readable_date_time_str + " *********************\n")
-
-AVAILABLE_MODELS = ['select model']
-for config in configurations.values():
-    AVAILABLE_MODELS.extend(config['MODEL'])
-
-    def check_model(model_name):
-        pattern = r'^o\d'
-        return bool(re.match(pattern, models))
-
-def postRequest(model, payload):
-    for name, config in configurations.items():
-        if model in config['MODEL']:
-            oModelsPattern = r'^o\d'
-            if "gpt" in model or bool(re.match(oModelsPattern, model)):
-                if "max_tokens" in payload:
-                    del payload["max_tokens"]
-                headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {config['KEY']}"
-                }
-            elif "claude" in model:
-                if "sonnet" in model.lower() or "opus" in model.lower():
-                    payload['max_tokens'] = 8192
-                else:
-                    payload['max_tokens'] = 4096
-                headers = {
-                "Content-Type": "application/json",
-                "x-api-key": config['KEY'],
-                "anthropic-version": "2023-06-01"
-                }
-            elif "deepseek" in model:
-                headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {config['KEY']}"
-                }
-            elif "gemini" in model:
-                headers = {
-                    "Content-Type": "application/json"
-                }
-                # Gemini requires a different payload structure ("contents")
-                # We need to transform the "messages" history to "contents"
-                gemini_contents = []
-                for message in payload["messages"]:
-                    # Map roles: 'assistant' becomes 'model'
-                    role = "model" if message["role"] == "assistant" else "user"
-                    gemini_contents.append({
-                        "role": role,
-                        "parts": [{"text": message["content"]}]
-                    })
-                gemini_payload = {"contents": gemini_contents}
-                # Gemini API URL includes the model and action
-                url = f"{config['URL']}{model}:generateContent?key={config['KEY']}"
-                return requests.post(url=url, headers=headers, json=gemini_payload, timeout=config['TIMEOUT'])
-            else:
-                raise ValueError(f"Selected model is invalid: {model}")
-
-            return requests.post(url=config['URL'], headers=headers, json=payload, timeout=config['TIMEOUT'])
-
-    raise KeyError(f"No configuration was found for the selected model: {model}")
+    f.write("********************* New Session " + readable_date_time_str + " *********************\n")
 
 class ApplicationController(QObject):
     def __init__(self, parent=None):
@@ -181,8 +264,12 @@ class ApplicationController(QObject):
             payload["messages"].pop()
             return "Request timed out!", param, None, None
         except requests.exceptions.RequestException as e:
+            if 'error' in response.json():
+                errMsg = response.json()['error']['message']
+            else:
+                errMsg = str(f"A request error occurred: {e}")
             payload["messages"].pop()
-            return str(f"A request error occurred: {e}"), param, None, None
+            return errMsg, param, None, None
         except ValueError as e:
             payload["messages"].pop()
             return str(f"A value error occurred: {e}"), param, None, None

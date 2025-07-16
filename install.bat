@@ -78,8 +78,8 @@ echo.
 echo The AiAdvisor application has been built and is ready for use.
 echo.
 echo VERIFICATION:
-echo   ✓ Executable created: %OUT_DIR%\%EXE_NAME%.exe
-echo   ✓ File size: 
+echo   Executable created: %OUT_DIR%\%EXE_NAME%.exe
+echo   File size: 
 for %%A in ("%OUT_DIR%\%EXE_NAME%.exe") do echo      %%~zA bytes
 echo.
 echo REQUIRED CONFIGURATION:
