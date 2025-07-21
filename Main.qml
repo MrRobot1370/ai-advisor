@@ -13,7 +13,7 @@ ApplicationWindow {
     height: 750
     minimumWidth: 800
     minimumHeight: 600
-    title: qsTr("AI Advisor - v0.1.0")
+    title: qsTr("AI Advisor - v0.2.0")
 
     // Modern color scheme
     readonly property color primaryColor: "#2C3E50"
