@@ -6,7 +6,7 @@
 
  AI Advisor is a cross-platform desktop application that provides a unified chat interface to interact with multiple AI model providers (OpenAI, Claude, Gemini, DeepSeek). It supports text-based chat with efficient token usage and cost-effective pay-as-you-go pricing, and can be packaged as a portable executable for Windows.
 
-<img width="752" height="586" alt="ai-advisor-v0 1 0" src="https://github.com/user-attachments/assets/7f5f4ccf-3805-404a-8ce4-f6bb5a5c7665" />
+ <img width="752" height="586" alt="ai-advisor-v0 2 0" src="https://github.com/user-attachments/assets/91031bdf-9a32-477c-ad52-237abdd93d34" />
 
  ## Features
  
@@ -22,18 +22,19 @@
  ## Architecture
 
  The application follows a modular architecture with clear separation of concerns:
- controllers/
- ├── applicationcontroller.py      # Main orchestrator
- ├── base/                         # Base classes and common functionality
- ├── ai/                           # AI model management and services
- ├── media/                        # Speech-to-text and text-to-speech
- └── utils/                        # Utilities (logging, clipboard)
 
- includes/
- ├── config/                       # Configuration management
- ├── network/                      # HTTP request handling
- ├── speechToText.py               # Speech recognition
- └── textToSpeech.py               # Speech synthesis
+    controllers/
+    ├── application_controller.py      # Main orchestrator
+    ├── base/                          # Base classes and common functionality
+    ├── ai/                            # AI model management and services
+    ├── media/                         # Speech-to-text and text-to-speech
+    └── utils/                         # Utilities (logging, clipboard)
+
+    includes/
+    ├── config/                        # Configuration management
+    ├── network/                       # HTTP request handling
+    ├── speech_to_text.py              # Speech recognition
+    └── text_to_speech.py              # Speech synthesis
  
  ### Key Components
  
@@ -142,7 +143,7 @@
  Use PyInstaller to create a standalone executable:
  
   ```bash
- pyinstaller --onefile --windowed --add-data "config;config" --add-data "icons;icons" main.py
+ pyinstaller --noconfirm --onefile --windowed --icon "ico\brain.ico" --add-data "includes;includes/" --add-data "controllers;controllers/" --add-data "controls;controls/" --add-data "icons;icons/" --add-data "Main.qml;." main.py
  ```
  
  ## Contributing
@@ -161,10 +162,6 @@
  ## License
  
  This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
- 
- ## Support
-
- For issues and feature requests, please use the GitHub issue tracker.
  
  ---
  
