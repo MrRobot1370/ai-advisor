@@ -11,5 +11,3 @@ def textToSpeech(text):
     engine.say(text)
     # Play the speech
     engine.runAndWait()
-    
-    
